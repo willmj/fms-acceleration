@@ -237,26 +237,31 @@ def recover_original_state_dict_from_dcp_checkpoint(
     from torch.distributed.checkpoint.default_planner import _EmptyStateDictLoadPlanner
     from torch.distributed.checkpoint.metadata import STATE_DICT_TYPE
     from torch.distributed.checkpoint.state_dict_loader import _load_state_dict
+    from safetensors.torch import load_file
 
     sd: STATE_DICT_TYPE = {}
-    _load_state_dict(
-        sd,
-        storage_reader=dcp.FileSystemReader(dcp_checkpoint_dir),
-        planner=_EmptyStateDictLoadPlanner(),
-        no_dist=True,
-    )
-    sd = sd[KEY_MODEL]
+    
+    def load_sharded_safetensors(sharded_files):
+        state_dict = {}
+        for file in sharded_files:
+            shard_dict = load_file(file)
+            state_dict.update(shard_dict)
+        return state_dict
 
-    # if not provided
+    sharded_files = [
+        dcp_checkpoint_dir+"/model-00001-of-00002.safetensors",
+        dcp_checkpoint_dir+"/model-00002-of-00002.safetensors"
+    ]
+
+    sd = load_sharded_safetensors(sharded_files)
+
     if pretrained_model_name_or_path is None:
         return sd
 
-    # now do the remap
     loc = get_resolved_checkpoint_location(pretrained_model_name_or_path)
     with open(os.path.join(loc, FILE_SAFETENSOR_INDEX), encoding="utf-8") as f:
         index = json.load(f)
 
-    # config
     config = PretrainedConfig.from_pretrained(pretrained_model_name_or_path)
 
     (
@@ -403,6 +408,7 @@ def recover_original_state_dict_from_dcp_checkpoint(
 
 # have it serve as a conversion script
 if __name__ == "__main__":
+    from safetensors.torch import save_file
     # Standard
     import argparse
 
@@ -438,7 +444,7 @@ if __name__ == "__main__":
 
     # search for the checkpint. By the code above, it must
     # start with FSDP_MODEL_NAME
-    if args.dcp_checkpoint_dir.startswith(FSDP_MODEL_NAME):
+    if args.dcp_checkpoint_dir.startswith("/testing"):
         checkpoint_dir = args.dcp_checkpoint_dir
     else:
         checkpoint_dir = [
@@ -465,4 +471,4 @@ if __name__ == "__main__":
     )
 
     # save it
-    torch.save(state_dict, args.output_dir)
+    save_file(state_dict, args.output_dir)
