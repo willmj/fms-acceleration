@@ -239,23 +239,31 @@ def get_state_dict_from_dcp_checkpoint(
 
 
 # function to get state dict from regular checkoint
-# - note this assumes sharded safetensors, we do not support
-#  the non-sharded case for now
-def get_state_dict_from_safe_checkpoint(
-    safe_checkpoint_dir: str,
-):
-    # Load the index
+def get_state_dict_from_safe_checkpoint(safe_checkpoint_dir: str):
     safe_index_file = os.path.join(safe_checkpoint_dir, SAFE_WEIGHTS_INDEX_NAME)
-    with open(safe_index_file, "r", encoding="utf-8") as f:
-        index = json.load(f)
-
-    sd = {}
-    shard_files = list(set(index["weight_map"].values()))
-    for shard_file in shard_files:
-        for key, v in load_file(os.path.join(safe_checkpoint_dir, shard_file)).items():
-            sd[key] = v
-
-    return sd
+    if os.path.exists(safe_index_file):
+        # Load the index for sharded checkpoints
+        with open(safe_index_file, "r", encoding="utf-8") as f:
+            index = json.load(f)
+        sd = {}
+        shard_files = list(set(index["weight_map"].values()))
+        for shard_file in shard_files:
+            for key, v in load_file(os.path.join(safe_checkpoint_dir, shard_file)).items():
+                sd[key] = v
+                
+        return sd
+    else:
+        # No index file found, so assume the checkpoint is not sharded.
+        checkpoint_file = os.path.join(safe_checkpoint_dir, "model.safetensors")
+        if os.path.exists(checkpoint_file):
+            return load_file(checkpoint_file)
+        else:
+            files = [f for f in os.listdir(safe_checkpoint_dir) if f.endswith("model.safetensors")]
+            if len(files) == 1:
+                checkpoint_file = os.path.join(safe_checkpoint_dir, files[0])
+                return load_file(checkpoint_file)
+            else:
+                raise FileNotFoundError("No valid safetensors checkpoint found in directory.")
 
 
 # function to get the ScatterMoE state dict from its DCP checkpoint
@@ -429,6 +437,8 @@ def save_sharded_safetensors(
     metadata: Dict,
     max_shard_size: Union[int, str] = "5GB",
 ):
+    os.makedirs(save_directory, exist_ok=True)
+
     filename_pattern = SAFE_WEIGHTS_NAME.replace(".bin", "{suffix}.bin").replace(
         ".safetensors", "{suffix}.safetensors"
     )
@@ -437,21 +447,28 @@ def save_sharded_safetensors(
         filename_pattern=filename_pattern,
         max_shard_size=max_shard_size,
     )
-    index = {
-        "metadata": state_dict_split.metadata,
-        "weight_map": state_dict_split.tensor_to_filename,
-    }
-    # Save the index
-    with open(
-        os.path.join(save_directory, SAFE_WEIGHTS_INDEX_NAME), "w", encoding="utf-8"
-    ) as f:
-        content = json.dumps(index, indent=2, sort_keys=True) + "\n"
-        f.write(content)
 
-    filename_to_tensors = state_dict_split.filename_to_tensors.items()
-    for shard_file, tensors in filename_to_tensors:
-        shard = {tensor: input_state_dict[tensor].contiguous() for tensor in tensors}
-        save_file(shard, os.path.join(save_directory, shard_file), metadata=metadata)
+    if len(state_dict_split.filename_to_tensors) == 1:
+        single_file = os.path.join(save_directory, SAFE_WEIGHTS_NAME)
+        save_file(
+            {k: v.contiguous() for k, v in input_state_dict.items()},
+            single_file,
+            metadata=metadata,
+        )
+    else:
+        index = {
+            "metadata": state_dict_split.metadata,
+            "weight_map": state_dict_split.tensor_to_filename,
+        }
+        index_path = os.path.join(save_directory, SAFE_WEIGHTS_INDEX_NAME)
+        with open(index_path, "w", encoding="utf-8") as f:
+            content = json.dumps(index, indent=2, sort_keys=True) + "\n"
+            f.write(content)
+
+        filename_to_tensors = state_dict_split.filename_to_tensors.items()
+        for shard_file, tensors in filename_to_tensors:
+            shard = {tensor: input_state_dict[tensor].contiguous() for tensor in tensors}
+            shard_path = os.path.join(save_directory, shard_file)
 
 
 # --------------------------- SCRIPT -------------------------
