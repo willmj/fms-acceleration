@@ -23,6 +23,7 @@ import shutil
 # Third Party
 from accelerate.logging import get_logger
 from accelerate.utils.constants import FSDP_MODEL_NAME, OPTIMIZER_NAME
+from accelerate.utils.modeling import is_peft_model
 from huggingface_hub import split_torch_state_dict_into_shards
 from safetensors.torch import load_file, save_file
 from torch.distributed.checkpoint.default_planner import (
@@ -31,6 +32,7 @@ from torch.distributed.checkpoint.default_planner import (
 )
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 from torch.distributed.fsdp.fully_sharded_data_parallel import StateDictType
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from transformers import PretrainedConfig
 from transformers.utils import CONFIG_NAME, SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 import torch
@@ -64,6 +66,8 @@ KEY_OPTIMIZER = "optimizer"
 
 # rewrite of func from accelerate.utils.fsdp_utils.py
 # - empty function, the main logic will be in save_fsdp_optimizer (see below).
+# rewrite of func from accelerate.utils.fsdp_utils.py
+# - empty function, the main logic will be in save_fsdp_optimizer (see below).
 def save_fsdp_model(
     fsdp_plugin, accelerator, model, output_dir, model_index=0, adapter_only=False
 ):
@@ -75,16 +79,28 @@ def save_fsdp_model(
 # rewrite of func from accelerate.utils.fsdp_utils.py
 # - saves both model and optimizer at the same time
 def save_fsdp_optimizer(
-    fsdp_plugin, accelerator, optimizer, model, output_dir, optimizer_index=0
+    fsdp_plugin, accelerator, optimizer, model, output_dir, optimizer_index=0, adapter_only=False
 ):
-
     if fsdp_plugin.state_dict_type != StateDictType.SHARDED_STATE_DICT:
         raise NotImplementedError(
             "Checkpointing for megablocks only enabled for sharded state dict."
         )
 
-    # get the state dicts for model and optimize
-    (model_state_dict, optimizer_state_dict) = get_state_dict(model, optimizer)
+    # - get the state dicts for model and optimize
+    if adapter_only and is_peft_model(model):
+        # - get adapter-only model state under FSDP context
+        with FSDP.state_dict_type(
+            model,
+            fsdp_plugin.state_dict_type,
+            fsdp_plugin.state_dict_config,
+            fsdp_plugin.optim_state_dict_config
+        ):
+            from peft import get_peft_model_state_dict
+            model_state_dict = get_peft_model_state_dict(model, adapter_name=model.active_adapter)
+        _, optimizer_state_dict = get_state_dict(model, optimizer)
+    else:
+        # - standard full model/optimizer states
+        model_state_dict, optimizer_state_dict = get_state_dict(model, optimizer)
 
     # - save model
     ckpt_model = os.path.join(output_dir, f"{FSDP_MODEL_NAME}_{MODEL_INDEX}")
@@ -130,18 +146,31 @@ def load_fsdp_optimizer(
     optimizer_index=0,
     adapter_only=False,
 ):
-
     accelerator.wait_for_everyone()
     if fsdp_plugin.state_dict_type != StateDictType.SHARDED_STATE_DICT:
         raise NotImplementedError(
             "Checkpointing for megablocks only enabled for sharded state dict."
         )
 
-    # - get the state dicts
-    model_state_dict, optimizer_state_dict = get_state_dict(model, optimizer)
+     # - get the state dicts
+    if adapter_only and is_peft_model(model):
+        # - get adapter-specific model state under FSDP context
+        with FSDP.state_dict_type(
+            model,
+            fsdp_plugin.state_dict_type,
+            fsdp_plugin.state_dict_config,
+            fsdp_plugin.optim_state_dict_config
+        ):
+            from peft import get_peft_model_state_dict
+            model_state_dict = get_peft_model_state_dict(model, adapter_name=model.active_adapter)
+        _, optimizer_state_dict = get_state_dict(model, optimizer)
+    else:
+        # - standard full model/optimizer states
+        model_state_dict, optimizer_state_dict = get_state_dict(model, optimizer)
 
     # - load the model state dict
     ckpt_model = os.path.join(input_dir, f"{FSDP_MODEL_NAME}_{MODEL_INDEX}")
+    logger.info(f"Loading model from {ckpt_model}")
     dcp.load(
         state_dict={KEY_MODEL: model_state_dict},
         storage_reader=dcp.FileSystemReader(ckpt_model),
@@ -150,6 +179,7 @@ def load_fsdp_optimizer(
 
     # - load the optimizer state dict
     ckpt_opt = os.path.join(input_dir, f"{OPTIMIZER_NAME}_{optimizer_index}")
+    logger.info(f"Loading optimizer from {ckpt_opt}")
     dcp.load(
         state_dict={KEY_OPTIMIZER: optimizer_state_dict},
         storage_reader=dcp.FileSystemReader(ckpt_opt),
@@ -181,6 +211,13 @@ def load_fsdp_optimizer(
             group["initial_lr"] = 0.0
             group["eps"] = 1e-8
             group["weight_decay"] = 0.0
+
+    # make a hook and restrive
+    PretrainedConfig._dict_from_json_file = _dict_from_json_file
+    PretrainedConfig.from_pretrained(model_name_or_path)
+    PretrainedConfig._dict_from_json_file = _old_func
+    return os.path.dirname(result)
+
 
 
 # function to replace various trainer functions in HF with the ones
