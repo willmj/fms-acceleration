@@ -471,14 +471,14 @@ def recover_original_state_dict_from_checkpoint(
                 for i, lora_key in enumerate(scatter_keys):
                     if len(scatter_keys) == 2:
                         model_key_parts = model_key.split(".")
-                        layer_index = model_key_parts.index("layer")
+                        weight_index = model_key_parts.index("weight")
 
                         # Replace the "layer.weight" part with "layer.lora_A.weight" or
                         # "layer.lora_B.weight"
                         if "lora_A" in lora_key:
-                            model_key_parts[layer_index + 1] = "lora_A.weight"
+                            model_key_parts[weight_index] = "lora_A.weight"
                         elif "lora_B" in lora_key:
-                            model_key_parts[layer_index + 1] = "lora_B.weight"
+                            model_key_parts[weight_index] = "lora_B.weight"
 
                         # Rebuild the model_key and assign the corresponding scatter_param
                         new_model_key = ".".join(model_key_parts)
