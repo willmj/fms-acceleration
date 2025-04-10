@@ -310,7 +310,7 @@ class ScatterMoE(torch.nn.Module):
                 dtype=dtype,
                 device=device,
                 lora_config=lora_config,
-                )
+            )
 
     # referenced from dolomite-engine
     def _compute_routing_weights(self, hidden_states: torch.Tensor):
