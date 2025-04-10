@@ -280,8 +280,28 @@ class ScatterMoE(torch.nn.Module):
         # - w3 (optional): the gate projection.
         # TODO: Custom non-linear layers not supported in vLLM,
         # must be investigated further before enabling
-        if lora_config is None:
-            self.w1 = ScatteredExperts(
+        self.w1 = ScatteredExperts(
+            in_features=self.hidden_size,
+            out_features=self.intermediate_size,
+            num_experts=self.num_experts,
+            fan_out=self.top_k if not self.all_to_all else 1,
+            grouped_out=True,
+            dtype=dtype,
+            device=device,
+            lora_config=lora_config,
+        )
+        self.w2 = ScatteredExperts(
+            in_features=self.intermediate_size,
+            out_features=self.hidden_size,
+            num_experts=self.num_experts,
+            fan_out=1,
+            grouped_in=True,
+            dtype=dtype,
+            device=device,
+            lora_config=lora_config,
+        )
+        if mlp_arch == SCATTERMOE_SPEC_HAS_GATE:
+            self.w3 = ScatteredExperts(
                 in_features=self.hidden_size,
                 out_features=self.intermediate_size,
                 num_experts=self.num_experts,
@@ -290,27 +310,6 @@ class ScatterMoE(torch.nn.Module):
                 dtype=dtype,
                 device=device,
                 lora_config=lora_config,
-            )
-            self.w2 = ScatteredExperts(
-                in_features=self.intermediate_size,
-                out_features=self.hidden_size,
-                num_experts=self.num_experts,
-                fan_out=1,
-                grouped_in=True,
-                dtype=dtype,
-                device=device,
-                lora_config=lora_config,
-            )
-            if mlp_arch == SCATTERMOE_SPEC_HAS_GATE:
-                self.w3 = ScatteredExperts(
-                    in_features=self.hidden_size,
-                    out_features=self.intermediate_size,
-                    num_experts=self.num_experts,
-                    fan_out=self.top_k if not self.all_to_all else 1,
-                    grouped_out=True,
-                    dtype=dtype,
-                    device=device,
-                    lora_config=lora_config,
                 )
 
     # referenced from dolomite-engine
@@ -460,39 +459,36 @@ class ScatterMoE(torch.nn.Module):
             )
 
         # compute the up projection
-        if hasattr(self, "w1"):
-            out = self.w1(
+        out = self.w1(
+            hidden_states,
+            sorted_expert_idxs,
+            sorted_scattered_idxs,
+            padded_block_idxs,
+            expert_offsets,
+        )
+        out = self.activation(out)
+
+        # - if the arch has a seperate gate projection
+        if self.w3:
+            out *= self.w3(
                 hidden_states,
                 sorted_expert_idxs,
                 sorted_scattered_idxs,
                 padded_block_idxs,
                 expert_offsets,
             )
-            out = self.activation(out)
-
-        # - if the arch has a seperate gate projection
-        if hasattr(self, "w3"):
-            if self.w3:
-                out *= self.w3(
-                    hidden_states,
-                    sorted_expert_idxs,
-                    sorted_scattered_idxs,
-                    padded_block_idxs,
-                    expert_offsets,
-                )
 
         # compute the down projection
         # - if no all-to-all processing, then depend on
         # scattermoe kernel to perform the final scattering
-        if hasattr(self, "w2"):
-            hidden_states = self.w2(
-                out,
-                sorted_expert_idxs,
-                sorted_scattered_idxs,
-                padded_block_idxs,
-                expert_offsets,
-                gates=(None if self.all_to_all else routing_weights),
-            )
+        hidden_states = self.w2(
+            out,
+            sorted_expert_idxs,
+            sorted_scattered_idxs,
+            padded_block_idxs,
+            expert_offsets,
+            gates=(None if self.all_to_all else routing_weights),
+        )
 
         # maybe scatter
         hidden_states = self._maybe_scatter(
