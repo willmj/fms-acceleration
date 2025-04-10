@@ -98,7 +98,11 @@ def load_experts_onto_device(
         )
 
         # install gradient scaling hook
-        if KEY_SCATTERMOE_ROUTER not in weight_name:
+        if (
+            KEY_SCATTERMOE_ROUTER not in weight_name
+            and KEY_SCATTERMOE_LORA_A_ROUTER not in weight_name 
+            and KEY_SCATTERMOE_LORA_B_ROUTER not in weight_name
+        ):
             if param.requires_grad:
                 param.register_hook(_hook)
 

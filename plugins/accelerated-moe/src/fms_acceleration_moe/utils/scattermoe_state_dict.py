@@ -174,7 +174,6 @@ def get_checkpoint_meta_from_sharded_safetensor(
             else:
                 _map[KEY_SCATTERMOE_ROUTER].append((k, stfile))
         elif m.group(1) in expert_name:
-            # Custom w1, w2, w3 are not supported for lora
             index = m.group(2)
             index = 0 if index is None else int(index)
             mod = None
