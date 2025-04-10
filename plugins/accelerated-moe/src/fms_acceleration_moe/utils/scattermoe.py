@@ -456,36 +456,39 @@ class ScatterMoE(torch.nn.Module):
             )
 
         # compute the up projection
-        out = self.w1(
-            hidden_states,
-            sorted_expert_idxs,
-            sorted_scattered_idxs,
-            padded_block_idxs,
-            expert_offsets,
-        )
-        out = self.activation(out)
-
-        # - if the arch has a seperate gate projection
-        if self.w3:
-            out *= self.w3(
+        if hasattr(self, "w1"):
+            out = self.w1(
                 hidden_states,
                 sorted_expert_idxs,
                 sorted_scattered_idxs,
                 padded_block_idxs,
                 expert_offsets,
             )
+            out = self.activation(out)
+
+        # - if the arch has a seperate gate projection
+        if hasattr(self, "w3"):
+            if self.w3:
+                out *= self.w3(
+                    hidden_states,
+                    sorted_expert_idxs,
+                    sorted_scattered_idxs,
+                    padded_block_idxs,
+                    expert_offsets,
+                )
 
         # compute the down projection
         # - if no all-to-all processing, then depend on
         # scattermoe kernel to perform the final scattering
-        hidden_states = self.w2(
-            out,
-            sorted_expert_idxs,
-            sorted_scattered_idxs,
-            padded_block_idxs,
-            expert_offsets,
-            gates=(None if self.all_to_all else routing_weights),
-        )
+        if hasattr(self, "w2"):
+            hidden_states = self.w2(
+                out,
+                sorted_expert_idxs,
+                sorted_scattered_idxs,
+                padded_block_idxs,
+                expert_offsets,
+                gates=(None if self.all_to_all else routing_weights),
+            )
 
         # maybe scatter
         hidden_states = self._maybe_scatter(
