@@ -175,7 +175,7 @@ def get_checkpoint_meta_from_sharded_safetensor(
             else:
                 _map[KEY_SCATTERMOE_ROUTER].append((k, stfile))
         elif m.group(1) in expert_name:
-            if "input_linear" in target_modules and "output_linear" in target_modules:
+            if ("input_linear" in target_modules and "output_linear" in target_modules) or lora_utils:
                 index = m.group(2)
                 index = 0 if index is None else int(index)
                 mod = None
