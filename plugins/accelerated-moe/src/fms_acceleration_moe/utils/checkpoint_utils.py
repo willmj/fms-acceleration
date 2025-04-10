@@ -478,7 +478,7 @@ def recover_original_state_dict_from_checkpoint(
                     elif "lora_B" in lora_key:
                         model_key_parts[weight_index] = "lora_B.weight"
                     # Rebuild the model_key and assign the corresponding scatter_param
-                        new_model_key = ".".join(model_key_parts)
+                    new_model_key = ".".join(model_key_parts)
                     if len(scatter_keys) == 2:
                         sd[new_model_key] = scatter_params[lora_key]
                     else:
