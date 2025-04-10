@@ -346,23 +346,25 @@ def prepare_scattermoe(
                         elif "lora_B" in name:
                             torch.nn.init.normal_(sd[name])
 
-            if device_mesh is None:
-                # - if not on meta, just load the state dict
-                # - and then put on the device
-                if not is_fsdp_enabled() or is_local_dist_rank_0():
-                    moe.load_state_dict(sd)
-                    moe = moe.to(device)
-            else:
-                # - otherwise, we need to distribtue and will
-                #   replace the parameters
-                load_experts_onto_device(
-                    moe, sd, device_mesh, num_experts_per_device, lora
-                )
-            # module swap
-            setattr(parent, module_name, moe)
+            possible_target_modules = ["all_linear", "router", "layer", "input_linear", "output_linear"]
+            if any(module in lora_config.target_modules for module in possible_target_modules):
+                if device_mesh is None:
+                    # - if not on meta, just load the state dict
+                    # - and then put on the device
+                    if not is_fsdp_enabled() or is_local_dist_rank_0():
+                        moe.load_state_dict(sd)
+                        moe = moe.to(device)
+                else:
+                    # - otherwise, we need to distribtue and will
+                    #   replace the parameters
+                    load_experts_onto_device(
+                        moe, sd, device_mesh, num_experts_per_device, lora
+                    )
+                # module swap
+                setattr(parent, module_name, moe)
 
-            # - keep track of the name for returning
-            moe_module_names.add(module_name)
+                # - keep track of the name for returning
+                moe_module_names.add(module_name)
 
     except ValueError as e:
         raise ValueError(
