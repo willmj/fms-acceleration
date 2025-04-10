@@ -53,7 +53,6 @@ def load_experts_onto_device(
     state_dict: OrderedDict,
     device_mesh: DeviceMesh,
     num_experts_per_device: int,
-    lora: bool,
 ):
 
     # hook for scaling the gradient
@@ -257,6 +256,7 @@ def prepare_scattermoe(
                 router_name,
                 "|".join(expert_name),
                 lora_start=lora,
+                target_modules=lora_config.target_modules,
             )
 
             # the parent module
@@ -358,7 +358,7 @@ def prepare_scattermoe(
                     # - otherwise, we need to distribtue and will
                     #   replace the parameters
                     load_experts_onto_device(
-                        moe, sd, device_mesh, num_experts_per_device, lora
+                        moe, sd, device_mesh, num_experts_per_device
                     )
                 # module swap
                 setattr(parent, module_name, moe)
