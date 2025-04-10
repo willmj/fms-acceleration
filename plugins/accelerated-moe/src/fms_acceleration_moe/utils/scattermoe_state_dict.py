@@ -177,8 +177,13 @@ def get_checkpoint_meta_from_sharded_safetensor(
             index = m.group(2)
             index = 0 if index is None else int(index)
             mod = None
-            for mod in expert_map.get(m.group(1), expert_map.get(m.group(3))):
-                _insert(_map[f"{mod}.weight"], index, (k, stfile))
+            if not lora_utils:
+                for mod in expert_map.get(m.group(1), expert_map.get(m.group(3))):
+                    _insert(_map[f"{mod}.weight"], index, (k, stfile))
+            else:
+                for mod in expert_map.get(m.group(1), expert_map.get(m.group(3))):
+                    _insert(_map[f"{mod}.lora_A"], index, (k, stfile))
+                    _insert(_map[f"{mod}.lora_B"], index, (k, stfile))
 
             assert mod is not None, f"cannot map '{rel_k}'"
 
