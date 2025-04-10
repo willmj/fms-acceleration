@@ -274,7 +274,7 @@ class ScatterMoE(torch.nn.Module):
         # - w1: the up_projection.
         # - w2: the down_projection.
         # - w3 (optional): the gate projection.
-        if not "input_linear" in lora_config.target_modules:
+        if "input_linear" in lora_config.target_modules:
             self.w1 = ScatteredExperts(
                 in_features=self.hidden_size,
                 out_features=self.intermediate_size,
@@ -285,7 +285,7 @@ class ScatterMoE(torch.nn.Module):
                 device=device,
                 lora_config=lora_config,
             )
-        if not "output_linear" in lora_config.target_modules:
+        if "output_linear" in lora_config.target_modules:
             self.w2 = ScatteredExperts(
                 in_features=self.intermediate_size,
                 out_features=self.hidden_size,
@@ -296,7 +296,7 @@ class ScatterMoE(torch.nn.Module):
                 device=device,
                 lora_config=lora_config,
             )
-        if not "input_linear" in lora_config.target_modules:
+        if "input_linear" in lora_config.target_modules:
             if mlp_arch == SCATTERMOE_SPEC_HAS_GATE:
                 self.w3 = ScatteredExperts(
                     in_features=self.hidden_size,
