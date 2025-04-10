@@ -237,10 +237,6 @@ class ScatterMoE(torch.nn.Module):
             assert (
                 lora_config.bias == "none"
             ), "ScatterMoE currently unable to handle bias in the lora adapters"
-            assert (
-                lora_config.target_modules == INCLUDE_LINEAR_LAYERS_SHORTHAND
-                or INCLUDE_LINEAR_LAYERS_SHORTHAND in lora_config.target_modules
-            ), "ScatterMoe currently only handles lora adapters on all linears."
 
             assert lora_config.init_lora_weights in {
                 True,
