@@ -237,16 +237,17 @@ class ScatterMoE(torch.nn.Module):
                 lora_config.bias == "none"
             ), "ScatterMoE currently unable to handle bias in the lora adapters"
 
-            required_modules = ["router", "layer", "all-linear"]
-            if (
-                "input_linear" in lora_config.target_modules
-                or "output_linear" in lora_config.target_modules
-            ):
-                # Assert that the target modules also include at least one from required_modules
-                assert any(
-                    module in lora_config.target_modules for module in required_modules
-                ), "If 'input_linear' or 'output_linear' is included as a target module,\
-                      'router' must also be included"
+            if hasattr(lora_config, "target_modules"):
+                required_modules = ["router", "layer", "all-linear"]
+                if (
+                    "input_linear" in lora_config.target_modules
+                    or "output_linear" in lora_config.target_modules
+                ):
+                    # Assert that the target modules also include at least one from required_modules
+                    assert any(
+                        module in lora_config.target_modules for module in required_modules
+                    ), "If 'input_linear' or 'output_linear' is included as a target module,\
+                        'router' must also be included"
 
             assert lora_config.init_lora_weights in {
                 True,
