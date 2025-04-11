@@ -240,6 +240,7 @@ def prepare_scattermoe(
 
         weight_map = load_weight_map(loc, "model.safetensors", FILE_SAFETENSOR_INDEX)
 
+        target_modules=None
         if lora_config:
             target_modules = lora_config.target_modules
 
