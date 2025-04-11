@@ -185,13 +185,16 @@ def get_checkpoint_meta_from_sharded_safetensor(
                 index = m.group(2)
                 index = 0 if index is None else int(index)
                 mod = None
-                if not ip_op_layers:
-                    for mod in expert_map.get(m.group(1), expert_map.get(m.group(3))):
-                        _insert(_map[f"{mod}.weight"], index, (k, stfile))
-                else:
-                    for mod in expert_map.get(m.group(1), expert_map.get(m.group(3))):
-                        _insert(_map[f"{mod}.lora_A"], index, (k, stfile))
-                        _insert(_map[f"{mod}.lora_B"], index, (k, stfile))
+                for mod in expert_map.get(m.group(1), expert_map.get(m.group(3))):
+                    _insert(_map[f"{mod}.lora_A"], index, (k, stfile))
+                    _insert(_map[f"{mod}.lora_B"], index, (k, stfile))
+                assert mod is not None, f"cannot map '{rel_k}'"
+            elif not ip_op_layers and not target_modules:
+                index = m.group(2)
+                index = 0 if index is None else int(index)
+                mod = None
+                for mod in expert_map.get(m.group(1), expert_map.get(m.group(3))):
+                    _insert(_map[f"{mod}.weight"], index, (k, stfile))
                 assert mod is not None, f"cannot map '{rel_k}'"
 
     if len(_map) == 0:
