@@ -240,6 +240,9 @@ def prepare_scattermoe(
 
         weight_map = load_weight_map(loc, "model.safetensors", FILE_SAFETENSOR_INDEX)
 
+        if lora_config:
+            target_modules = lora_config.target_modules
+
         # e.g., prefix: 'model.layers.0',
         #       module_name: 'block_sparse_moe'
         for prefix, (module_name, _, has_bias) in tqdm(
@@ -251,7 +254,7 @@ def prepare_scattermoe(
                 module_name,
                 router_name,
                 "|".join(expert_name),
-                target_modules=lora_config.target_modules,
+                target_modules=target_modules,
             )
 
             # the parent module
