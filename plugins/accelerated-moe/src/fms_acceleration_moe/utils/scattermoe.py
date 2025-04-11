@@ -231,7 +231,7 @@ class ScatterMoE(torch.nn.Module):
             not has_bias
         ), "ScatterMoE currently unable to handle bias in both gates and experts."
 
-        target_modules=None
+        target_modules = None
 
         if lora_config is not None:
             # since this is self implemented, we really only support basic lora funcs
@@ -243,10 +243,7 @@ class ScatterMoE(torch.nn.Module):
                 target_modules = lora_config.target_modules
 
             required_modules = ["router", "layer", "all-linear"]
-            if (
-                "input_linear" in target_modules
-                or "output_linear" in target_modules
-            ):
+            if "input_linear" in target_modules or "output_linear" in target_modules:
                 # Assert that the target modules also include at least one from required_modules
                 assert any(
                     module in target_modules for module in required_modules
