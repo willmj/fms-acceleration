@@ -342,7 +342,7 @@ def prepare_scattermoe(
                             torch.nn.init.normal_(sd[name])
 
             possible_target_modules = [
-                "all_linear",
+                "all-linear",
                 "router",
                 "layer",
                 "input_linear",
