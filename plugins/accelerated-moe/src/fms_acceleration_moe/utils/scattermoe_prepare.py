@@ -354,7 +354,7 @@ def prepare_scattermoe(
             ]
             if any(
                 module in (target_modules or []) for module in possible_target_modules
-            ):
+            ) or not lora_config:
                 if device_mesh is None:
                     # - if not on meta, just load the state dict
                     # - and then put on the device
