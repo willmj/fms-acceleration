@@ -353,7 +353,7 @@ def prepare_scattermoe(
                 "output_linear",
             ]
             if any(
-                module in lora_config.target_modules
+                module in target_modules
                 for module in possible_target_modules
             ):
                 if device_mesh is None:
