@@ -189,7 +189,7 @@ def get_checkpoint_meta_from_sharded_safetensor(
                     _insert(_map[f"{mod}.lora_A"], index, (k, stfile))
                     _insert(_map[f"{mod}.lora_B"], index, (k, stfile))
                 assert mod is not None, f"cannot map '{rel_k}'"
-            elif not ip_op_layers and not target_modules:
+            elif not ip_op_layers and not router_layer and not target_modules:
                 index = m.group(2)
                 index = 0 if index is None else int(index)
                 mod = None
